@@ -5,6 +5,14 @@ resource "google_compute_instance" "bindplane_control" {
 
   tags = ["bindplane"]
 
+#  lifecycle {
+#    prevent_destroy = true
+#    ignore_changes = [
+#      metadata_startup_script,
+#      boot_disk,
+#    ]
+#  }
+
   boot_disk {
     initialize_params {
       image = "ubuntu-os-cloud/ubuntu-2204-lts"
@@ -41,7 +49,6 @@ apt-get install -y curl unzip postgresql postgresql-contrib
 echo "==== Starting PostgreSQL ===="
 systemctl enable postgresql
 systemctl start postgresql
-systemctl status postgresql --no-pager
 
 echo "==== Configuring PostgreSQL ===="
 sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${var.pg_user}'" | grep -q 1 || \
@@ -50,7 +57,7 @@ sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${var.pg_user}'
 sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='${var.pg_database}'" | grep -q 1 || \
   sudo -u postgres createdb -O ${var.pg_user} ${var.pg_database}
 
-echo "==== Installing Bindplane (NO init) ===="
+echo "==== Installing Bindplane ===="
 curl -fsSL https://storage.googleapis.com/bindplane-op-releases/bindplane/latest/install-linux.sh -o /tmp/install.sh
 bash /tmp/install.sh
 rm -f /tmp/install.sh
@@ -89,16 +96,23 @@ EOF
 
 chmod 600 /etc/bindplane/config.yaml
 
-echo "==== Initializing Bindplane server with config ===="
+echo "==== Initializing Bindplane server ===="
 BINDPLANE_CONFIG_HOME=/var/lib/bindplane \
   /usr/local/bin/bindplane init server \
   --config /etc/bindplane/config.yaml
 
-echo "==== Enabling & starting Bindplane ===="
+echo "==== Enabling & starting Bindplane service ===="
+
+sleep 30
+
 systemctl daemon-reload
 systemctl enable bindplane
 systemctl start bindplane
 
+sleep 10
+systemctl status bindplane --no-pager
+
 echo "==== Bindplane startup completed successfully ===="
+
 SCRIPT
 }
